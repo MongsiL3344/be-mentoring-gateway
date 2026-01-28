@@ -3,25 +3,95 @@ server:
   error:
     include-message: always
 
+logging:
+  file:
+    name: gateway.log
+
 spring:
   application:
     name: gateway
-
   cloud:
     gateway:
       routes:
-        - id: user-service
-          uri: http://localhost:8081/
+        - id: order-service
+          uri: lb://ORDER-SERVICE
           predicates:
-            - Path=/**
+            - Path=/orders/**
             - Header=X-Role, ^user$
           filters:
             - AddRequestHeader=X-Mentoring, i-Keeper
+            - name: CircuitBreaker
+              args:
+                name: orderServiceCircuitBreaker
+                statusCodes: 500, 501, 502, 503, 504, 505, 506, 507, 508, 509, 510, 511
+
+        - id: user-service
+          uri: lb://USER-SERVICE
+          predicates:
+            - Path=/userservice/**
+            - Header=X-Role, ^user$
+          filters:
+            - AddRequestHeader=X-Mentoring, i-Keeper
+            - name: CircuitBreaker
+              args:
+                name: userServiceCircuitBreaker
+                statusCodes: 500, 501, 502, 503, 504, 505, 506, 507, 508, 509, 510, 511
 
         - id: admin-service
-          uri: http://localhost:8082/
+          uri: lb://ADMIN-SERVICE
           predicates:
-            - Path=/**
+            - Path=/adminservice/**
             - Header=X-Role, ^admin$
           filters:
             - AddRequestHeader=X-Mentoring, i-Keeper
+            - name: CircuitBreaker
+              args:
+                name: adminServiceCircuitBreaker
+                statusCodes: 500, 501, 502, 503, 504, 505, 506, 507, 508, 509, 510, 511
+
+    loadbalancer:
+      configurations: health-check
+      health-check:
+        enabled: true
+        path:
+          default: /actuator/health
+        initial-delay: 0s
+        interval: 15s
+
+eureka:
+  client:
+    serviceUrl:
+      defaultZone: http://localhost:8761/eureka/
+
+
+resilience4j:
+  circuitbreaker:
+    configs:
+      default:
+        failureRateThreshold: 60
+        slidingWindowType: COUNT_BASED
+        slidingWindowSize: 20
+        minimumNumberOfCalls: 20
+        waitDurationInOpenState: 30s
+        permittedNumberOfCallsInHalfOpenState: 10
+        slowCallDurationThreshold: 3s
+        slowCallRateThreshold: 50
+
+    instances:
+      userServiceCircuitBreaker:
+        baseConfig: default
+
+      adminServiceCircuitBreaker:
+        baseConfig: default
+
+      orderServiceCircuitBreaker:
+        baseConfig: default
+
+  timelimiter:
+    instances:
+      userServiceCircuitBreaker:
+        timeoutDuration: 3s
+      adminServiceCircuitBreaker:
+        timeoutDuration: 3s
+      orderServiceCircuitBreaker:
+        timeoutDuration: 3s

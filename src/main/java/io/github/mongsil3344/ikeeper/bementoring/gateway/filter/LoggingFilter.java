@@ -1,6 +1,9 @@
 package io.github.mongsil3344.ikeeper.bementoring.gateway.filter;
 
+import java.net.URI;
+
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cloud.gateway.support.ServerWebExchangeUtils;
 import org.springframework.core.Ordered;
 import org.springframework.stereotype.Component;
 import org.springframework.web.server.ServerWebExchange;
@@ -32,10 +35,21 @@ public class LoggingFilter implements WebFilter, Ordered {
                     ? exchange.getRequest().getCookies().getFirst("ROLE").getValue()
                     : "-";
         }
+        final String roleValue = role;
         
-        log.info("\n[Gateway Request]\nMethod: {}\nUrl: {}\nRole: {}\n", method, path, role);
-        
-        return chain.filter(exchange);
+        return chain.filter(exchange)
+                .then(Mono.fromRunnable(() -> {
+                    URI requestUrl = exchange.getAttribute(ServerWebExchangeUtils.GATEWAY_REQUEST_URL_ATTR);
+                    String target = "-";
+                    if (requestUrl != null) {
+                        if (requestUrl.getPort() > -1) {
+                            target = requestUrl.getHost() + ":" + requestUrl.getPort();
+                        } else {
+                            target = requestUrl.toString();
+                        }
+                    }
+                    log.info("\n[Gateway Request]\nMethod: {}\nUrl: {}\nRole: {}\nTarget: {}\n", method, path, roleValue, target);
+                }));
     }
 
     @Override
